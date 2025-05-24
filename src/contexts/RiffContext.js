@@ -49,7 +49,7 @@ export const RiffProvider = ({ children }) => {
         resetTime: getNextResetTime(),
       });
 
-      // Mock riffs data
+      // Mock riffs data - now with editing tracking
       setTodaysRiffs([
         {
           id: 'riff1',
@@ -59,6 +59,8 @@ export const RiffProvider = ({ children }) => {
           likes: 42,
           createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
           hasVoted: false,
+          hasBeenEdited: false,
+          votedUserIds: ['user789', 'user101'], // Track who voted
         },
         {
           id: 'riff2',
@@ -68,6 +70,8 @@ export const RiffProvider = ({ children }) => {
           likes: 38,
           createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
           hasVoted: true,
+          hasBeenEdited: true,
+          votedUserIds: ['user456', 'user101'],
         },
         {
           id: 'riff3',
@@ -77,6 +81,8 @@ export const RiffProvider = ({ children }) => {
           likes: 25,
           createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
           hasVoted: false,
+          hasBeenEdited: false,
+          votedUserIds: ['user456'],
         },
       ]);
 
@@ -113,6 +119,12 @@ export const RiffProvider = ({ children }) => {
         return { success: false, error: 'User not authenticated' };
       }
 
+      // Check if user already has a riff today
+      const userTodayRiff = todaysRiffs.find(riff => riff.userId === user.id);
+      if (userTodayRiff) {
+        return { success: false, error: 'You can only submit one riff per day' };
+      }
+
       const newRiff = {
         id: `riff_${Date.now()}`,
         userId: user.id,
@@ -121,10 +133,49 @@ export const RiffProvider = ({ children }) => {
         likes: 0,
         createdAt: new Date().toISOString(),
         hasVoted: false,
+        hasBeenEdited: false,
+        votedUserIds: [],
       };
       
       setTodaysRiffs(prev => [newRiff, ...prev]);
       return { success: true, riff: newRiff };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  };
+
+  const editRiff = async (riffId, newContent) => {
+    try {
+      if (!user) {
+        return { success: false, error: 'User not authenticated' };
+      }
+
+      const riff = todaysRiffs.find(r => r.id === riffId);
+      if (!riff) {
+        return { success: false, error: 'Riff not found' };
+      }
+
+      if (riff.userId !== user.id) {
+        return { success: false, error: 'You can only edit your own riffs' };
+      }
+
+      if (riff.hasBeenEdited) {
+        return { success: false, error: 'You can only edit your riff once' };
+      }
+
+      if (riff.votedUserIds.length > 0) {
+        return { success: false, error: 'Cannot edit riff after someone has voted on it' };
+      }
+
+      setTodaysRiffs(prev => 
+        prev.map(r => 
+          r.id === riffId 
+            ? { ...r, content: newContent, hasBeenEdited: true }
+            : r
+        )
+      );
+
+      return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -136,7 +187,16 @@ export const RiffProvider = ({ children }) => {
         prev.map(riff => {
           if (riff.id === riffId && riff.userId !== user?.id) {
             const newLikes = isUpvote ? riff.likes + 1 : Math.max(0, riff.likes - 1);
-            return { ...riff, likes: newLikes, hasVoted: isUpvote };
+            const newVotedUserIds = isUpvote 
+              ? [...riff.votedUserIds, user.id]
+              : riff.votedUserIds.filter(id => id !== user.id);
+            
+            return { 
+              ...riff, 
+              likes: newLikes, 
+              hasVoted: isUpvote,
+              votedUserIds: newVotedUserIds
+            };
           }
           return riff;
         })
@@ -211,6 +271,7 @@ export const RiffProvider = ({ children }) => {
     leaderboard,
     loading,
     createRiff,
+    editRiff,
     voteOnRiff,
     refreshData: loadTodaysData,
     getUserRiffs,

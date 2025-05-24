@@ -1,4 +1,62 @@
-import React, { useState } from 'react';
+todaysRiffContainer: {
+    margin: 15,
+    marginTop: 20,
+  },
+  riffCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  editedBadge: {
+    backgroundColor: '#FF9500',
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  editButton: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  editButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cantEditText: {
+    fontSize: 12,
+    color: '#8E8E93',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    margin: 15,
+    gap: 10,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#8E8E93',
+    padding: 18,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  editSubmitButton: {
+    flex: 2,
+  },import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -57,10 +115,13 @@ const CreateRiffScreen = ({ navigation }) => {
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.header}>
-          <Text style={styles.title}>Create Your Riff</Text>
-          {hasSubmittedToday && (
+          <Text style={styles.title}>
+            {isEditing ? 'Edit Your Riff' : 'Create Your Riff'}
+          </Text>
+          {hasSubmittedToday && !isEditing && (
             <Text style={styles.submittedNotice}>
-              You've already submitted a riff today! You can create another one.
+              You've already submitted today's riff! 
+              {canEdit && ' You can edit it once.'}
             </Text>
           )}
         </View>
@@ -72,48 +133,84 @@ const CreateRiffScreen = ({ navigation }) => {
           </View>
         )}
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Your Riff:</Text>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Share your creative take on today's prompt... (1-500 characters)"
-            placeholderTextColor="#8E8E93"
-            value={riffText}
-            onChangeText={setRiffText}
-            multiline
-            maxLength={500}
-            textAlignVertical="top"
-          />
-          <View style={styles.charCount}>
-            <Text style={[
-              styles.charCountText,
-              riffText.length > 450 && styles.charCountWarning
-            ]}>
-              {riffText.length}/500
-            </Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.submitButton, (!riffText.trim() || submitting) && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={!riffText.trim() || submitting}
-        >
-          <Text style={styles.submitButtonText}>
-            {submitting ? 'Submitting...' : 'Submit Riff'}
-          </Text>
-        </TouchableOpacity>
-
-        {hasSubmittedToday && (
-          <View style={styles.todaysRiffsContainer}>
-            <Text style={styles.todaysRiffsTitle}>Your Riffs Today:</Text>
-            {userRiffs.map((riff, index) => (
-              <View key={riff.id} style={styles.userRiffCard}>
-                <Text style={styles.userRiffContent}>{riff.content}</Text>
-                <Text style={styles.userRiffStats}>👍 {riff.likes} likes</Text>
+        {hasSubmittedToday && !isEditing && (
+          <View style={styles.todaysRiffContainer}>
+            <Text style={styles.todaysRiffsTitle}>Your Riff Today:</Text>
+            <View style={styles.userRiffCard}>
+              <Text style={styles.userRiffContent}>{todaysRiff.content}</Text>
+              <View style={styles.riffCardFooter}>
+                <Text style={styles.userRiffStats}>👍 {todaysRiff.likes} likes</Text>
+                {todaysRiff.hasBeenEdited && (
+                  <Text style={styles.editedBadge}>Edited</Text>
+                )}
               </View>
-            ))}
+              {canEdit && (
+                <TouchableOpacity style={styles.editButton} onPress={startEditing}>
+                  <Text style={styles.editButtonText}>Edit Riff</Text>
+                </TouchableOpacity>
+              )}
+              {!canEdit && (
+                <Text style={styles.cantEditText}>
+                  {todaysRiff.hasBeenEdited 
+                    ? 'Already edited (can only edit once)'
+                    : 'Cannot edit (someone has voted on it)'
+                  }
+                </Text>
+              )}
+            </View>
           </View>
+        )}
+
+        {(!hasSubmittedToday || isEditing) && (
+          <>
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>
+                {isEditing ? 'Edit Your Riff:' : 'Your Riff:'}
+              </Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Share your creative take on today's prompt... (1-500 characters)"
+                placeholderTextColor="#8E8E93"
+                value={riffText}
+                onChangeText={setRiffText}
+                multiline
+                maxLength={500}
+                textAlignVertical="top"
+              />
+              <View style={styles.charCount}>
+                <Text style={[
+                  styles.charCountText,
+                  riffText.length > 450 && styles.charCountWarning
+                ]}>
+                  {riffText.length}/500
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.buttonContainer}>
+              {isEditing && (
+                <TouchableOpacity style={styles.cancelButton} onPress={cancelEditing}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[
+                  styles.submitButton, 
+                  (!riffText.trim() || submitting) && styles.submitButtonDisabled,
+                  isEditing && styles.editSubmitButton
+                ]}
+                onPress={handleSubmit}
+                disabled={!riffText.trim() || submitting}
+              >
+                <Text style={styles.submitButtonText}>
+                  {submitting 
+                    ? (isEditing ? 'Updating...' : 'Submitting...') 
+                    : (isEditing ? 'Update Riff' : 'Submit Riff')
+                  }
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
