@@ -30,7 +30,7 @@ export const API_CONFIG = {
 export const SETTINGS = {
   dailyResetTime: '04:00', // 4 AM UTC
   maxRiffLength: 500,
-  minRiffLength: 10,
+  minRiffLength: 1,
   maxUsernameLength: 20,
   minUsernameLength: 3,
   minPasswordLength: 6,

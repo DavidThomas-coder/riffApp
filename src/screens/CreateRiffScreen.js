@@ -76,7 +76,7 @@ const CreateRiffScreen = ({ navigation }) => {
           <Text style={styles.inputLabel}>Your Riff:</Text>
           <TextInput
             style={styles.textInput}
-            placeholder="Share your creative take on today's prompt..."
+            placeholder="Share your creative take on today's prompt... (1-500 characters)"
             placeholderTextColor="#8E8E93"
             value={riffText}
             onChangeText={setRiffText}
