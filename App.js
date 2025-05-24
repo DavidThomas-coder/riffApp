@@ -1,4 +1,5 @@
 import React from 'react';
+import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -43,7 +44,7 @@ const MainTabs = () => (
       component={HomeScreen}
       options={{
         tabBarLabel: 'Today\'s Riff',
-        tabBarIcon: ({ color }) => <span style={{ fontSize: 20 }}>🏠</span>,
+        tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🏠</Text>,
       }}
     />
     <Tab.Screen 
@@ -51,7 +52,7 @@ const MainTabs = () => (
       component={CreateRiffScreen}
       options={{
         tabBarLabel: 'Create',
-        tabBarIcon: ({ color }) => <span style={{ fontSize: 20 }}>✏️</span>,
+        tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>✏️</Text>,
       }}
     />
     <Tab.Screen 
@@ -59,7 +60,7 @@ const MainTabs = () => (
       component={LeaderboardScreen}
       options={{
         tabBarLabel: 'Rankings',
-        tabBarIcon: ({ color }) => <span style={{ fontSize: 20 }}>🏆</span>,
+        tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🏆</Text>,
       }}
     />
     <Tab.Screen 
@@ -67,7 +68,7 @@ const MainTabs = () => (
       component={ProfileScreen}
       options={{
         tabBarLabel: 'Profile',
-        tabBarIcon: ({ color }) => <span style={{ fontSize: 20 }}>👤</span>,
+        tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>👤</Text>,
       }}
     />
   </Tab.Navigator>
