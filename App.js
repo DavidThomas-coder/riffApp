@@ -14,6 +14,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import CreateRiffScreen from './src/screens/CreateRiffScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import UserProfileScreen from './src/screens/UserProfileScreen';
 import LoadingSpinner from './src/components/LoadingSpinner';
 
 const Tab = createBottomTabNavigator();
@@ -23,6 +24,22 @@ const AuthStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Login" component={LoginScreen} />
     <Stack.Screen name="Register" component={RegisterScreen} />
+  </Stack.Navigator>
+);
+
+// Home Stack Navigator for nested navigation
+const HomeStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="HomeMain" component={HomeScreen} />
+    <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+  </Stack.Navigator>
+);
+
+// Leaderboard Stack Navigator 
+const LeaderboardStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="LeaderboardMain" component={LeaderboardScreen} />
+    <Stack.Screen name="UserProfile" component={UserProfileScreen} />
   </Stack.Navigator>
 );
 
@@ -41,7 +58,7 @@ const MainTabs = () => (
   >
     <Tab.Screen 
       name="Home" 
-      component={HomeScreen}
+      component={HomeStack}
       options={{
         tabBarLabel: 'Today\'s Riff',
         tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🏠</Text>,
@@ -57,7 +74,7 @@ const MainTabs = () => (
     />
     <Tab.Screen 
       name="Leaderboard" 
-      component={LeaderboardScreen}
+      component={LeaderboardStack}
       options={{
         tabBarLabel: 'Rankings',
         tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🏆</Text>,

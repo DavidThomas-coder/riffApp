@@ -167,6 +167,44 @@ export const RiffProvider = ({ children }) => {
     return todaysRiffs.filter(riff => riff.userId === user.id);
   };
 
+  const getUserRiffHistory = async (userId) => {
+    try {
+      // Mock riff history - in real app, fetch from API
+      const mockHistory = [
+        {
+          id: 'riff_hist_1',
+          userId: userId,
+          content: "Giant hamster wheels to power entire cities. We'll call it 'Rodent Renewable Energy'!",
+          likes: 23,
+          createdAt: '2025-05-23T10:30:00Z',
+          prompt: "What's the most ridiculous solution to climate change you can think of?",
+        },
+        {
+          id: 'riff_hist_2',
+          userId: userId,
+          content: "A smartphone feature that judges your life choices and sighs disappointedly.",
+          likes: 45,
+          createdAt: '2025-05-22T14:15:00Z',
+          prompt: "If you could add one completely useless feature to smartphones, what would it be?",
+        },
+        {
+          id: 'riff_hist_3',
+          userId: userId,
+          content: "The Regret Inn - where every room comes with a mirror that shows your worst decisions.",
+          likes: 12,
+          createdAt: '2025-05-21T09:45:00Z',
+          prompt: "What's the worst possible name for a luxury hotel?",
+        },
+      ];
+
+      // Sort by most recent first
+      return mockHistory.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    } catch (error) {
+      console.error('Failed to get user riff history:', error);
+      return [];
+    }
+  };
+
   const value = {
     dailyPrompt,
     todaysRiffs,
@@ -176,6 +214,7 @@ export const RiffProvider = ({ children }) => {
     voteOnRiff,
     refreshData: loadTodaysData,
     getUserRiffs,
+    getUserRiffHistory,
   };
 
   return (

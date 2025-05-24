@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 
 const RiffCard = ({ riff, onVote, isOwnRiff = false }) => {
+  const navigation = useNavigation();
   const formatTimeAgo = (dateString) => {
     const now = new Date();
     const created = new Date(dateString);
@@ -17,6 +19,15 @@ const RiffCard = ({ riff, onVote, isOwnRiff = false }) => {
     return `${diffInDays}d ago`;
   };
 
+  const handleUsernamePress = () => {
+    if (!isOwnRiff) {
+      navigation.navigate('UserProfile', {
+        userId: riff.userId,
+        username: riff.username,
+      });
+    }
+  };
+
   return (
     <View style={[styles.container, isOwnRiff && styles.ownRiffContainer]}>
       <View style={styles.header}>
@@ -27,7 +38,18 @@ const RiffCard = ({ riff, onVote, isOwnRiff = false }) => {
             </Text>
           </View>
           <View>
-            <Text style={styles.username}>@{riff.username}</Text>
+            <TouchableOpacity 
+              onPress={handleUsernamePress}
+              disabled={isOwnRiff}
+              style={styles.usernameButton}
+            >
+              <Text style={[
+                styles.username,
+                !isOwnRiff && styles.clickableUsername
+              ]}>
+                @{riff.username}
+              </Text>
+            </TouchableOpacity>
             <Text style={styles.timeAgo}>{formatTimeAgo(riff.createdAt)}</Text>
           </View>
         </View>
@@ -119,10 +141,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  usernameButton: {
+    // No specific styling needed - just makes the text touchable
+  },
   username: {
     fontSize: 16,
     fontWeight: '600',
     color: '#000',
+  },
+  clickableUsername: {
+    color: '#007AFF',
+    textDecorationLine: 'underline',
   },
   timeAgo: {
     fontSize: 12,

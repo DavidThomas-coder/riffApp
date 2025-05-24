@@ -1,7 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 
 const LeaderboardItem = ({ entry, position, isCurrentUser = false }) => {
+  const navigation = useNavigation();
   const getMedalEmoji = (medal) => {
     switch (medal) {
       case 'gold': return '🥇';
@@ -16,6 +18,15 @@ const LeaderboardItem = ({ entry, position, isCurrentUser = false }) => {
     if (pos === 2) return '#C0C0C0';
     if (pos === 3) return '#CD7F32';
     return '#F2F2F7';
+  };
+
+  const handleUsernamePress = () => {
+    if (!isCurrentUser) {
+      navigation.navigate('UserProfile', {
+        userId: entry.userId,
+        username: entry.username,
+      });
+    }
   };
 
   return (
@@ -39,9 +50,19 @@ const LeaderboardItem = ({ entry, position, isCurrentUser = false }) => {
       </View>
       
       <View style={styles.middleSection}>
-        <Text style={[styles.username, isCurrentUser && styles.currentUserText]}>
-          @{entry.username}
-        </Text>
+        <TouchableOpacity 
+          onPress={handleUsernamePress}
+          disabled={isCurrentUser}
+          style={styles.usernameButton}
+        >
+          <Text style={[
+            styles.username, 
+            isCurrentUser && styles.currentUserText,
+            !isCurrentUser && styles.clickableUsername
+          ]}>
+            @{entry.username}
+          </Text>
+        </TouchableOpacity>
         {isCurrentUser && (
           <Text style={styles.youBadge}>You</Text>
         )}
@@ -106,10 +127,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  usernameButton: {
+    // No specific styling needed - just makes the text touchable
+  },
   username: {
     fontSize: 16,
     fontWeight: '600',
     color: '#000',
+  },
+  clickableUsername: {
+    color: '#007AFF',
+    textDecorationLine: 'underline',
   },
   currentUserText: {
     color: '#007AFF',
