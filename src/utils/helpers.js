@@ -60,7 +60,7 @@ export const formatTimeAgo = (dateString) => {
   
   export const validateRiffContent = (content) => {
     const trimmed = content.trim();
-    return trimmed.length >= 10 && trimmed.length <= 500;
+    return trimmed.length >= 1 && trimmed.length <= 500;
   };
   
   // Array Helpers

@@ -21,12 +21,14 @@ const CreateRiffScreen = ({ navigation }) => {
   const hasSubmittedToday = userRiffs.length > 0;
 
   const handleSubmit = async () => {
-    if (riffText.trim().length < 10) {
-      Alert.alert('Too Short', 'Your riff needs to be at least 10 characters long');
+    const trimmedText = riffText.trim();
+    
+    if (trimmedText.length === 0) {
+      Alert.alert('Empty Riff', 'Your riff cannot be empty. Please write something!');
       return;
     }
 
-    if (riffText.trim().length > 500) {
+    if (trimmedText.length > 500) {
       Alert.alert('Too Long', 'Your riff cannot exceed 500 characters');
       return;
     }
