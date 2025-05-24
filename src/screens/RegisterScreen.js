@@ -214,4 +214,8 @@ const styles = StyleSheet.create({
   loginLink: {
     fontSize: 16,
     color: '#007AFF',
-    fontWeight:
+    fontWeight: '600',
+  },
+});
+
+export default RegisterScreen;
