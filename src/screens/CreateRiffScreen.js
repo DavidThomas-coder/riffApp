@@ -1,62 +1,4 @@
-todaysRiffContainer: {
-    margin: 15,
-    marginTop: 20,
-  },
-  riffCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  editedBadge: {
-    backgroundColor: '#FF9500',
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  editButton: {
-    backgroundColor: '#007AFF',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  editButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cantEditText: {
-    fontSize: 12,
-    color: '#8E8E93',
-    fontStyle: 'italic',
-    textAlign: 'center',
-    marginTop: 10,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    margin: 15,
-    gap: 10,
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: '#8E8E93',
-    padding: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  editSubmitButton: {
-    flex: 2,
-  },import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -71,12 +13,23 @@ import {
 import { useRiff } from '../contexts/RiffContext';
 
 const CreateRiffScreen = ({ navigation }) => {
-  const { dailyPrompt, createRiff, getUserRiffs } = useRiff();
+  const { dailyPrompt, createRiff, editRiff, getUserRiffs } = useRiff();
   const [riffText, setRiffText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingRiffId, setEditingRiffId] = useState(null);
 
   const userRiffs = getUserRiffs();
-  const hasSubmittedToday = userRiffs.length > 0;
+  const todaysRiff = userRiffs.length > 0 ? userRiffs[0] : null;
+  const hasSubmittedToday = !!todaysRiff;
+  const canEdit = todaysRiff && !todaysRiff.hasBeenEdited && todaysRiff.votedUserIds.length === 0;
+
+  useEffect(() => {
+    // If user has a riff today and can edit it, show it for editing
+    if (todaysRiff && canEdit && !isEditing) {
+      // Don't auto-populate, let user choose to edit
+    }
+  }, [todaysRiff, canEdit]);
 
   const handleSubmit = async () => {
     const trimmedText = riffText.trim();
@@ -91,21 +44,61 @@ const CreateRiffScreen = ({ navigation }) => {
       return;
     }
 
+    // Show warning dialog
+    const action = isEditing ? 'edit' : 'submit';
+    const warningMessage = isEditing 
+      ? 'Are you sure you want to edit your riff? You can only edit once, and you won\'t be able to edit again after someone votes on it.'
+      : 'Are you sure you want to submit your riff? You can only submit one riff per day, but you can edit it once before anyone votes on it.';
+
+    Alert.alert(
+      `Confirm ${action.charAt(0).toUpperCase() + action.slice(1)}`,
+      warningMessage,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: `${action.charAt(0).toUpperCase() + action.slice(1)}`, 
+          onPress: () => performSubmit(trimmedText)
+        }
+      ]
+    );
+  };
+
+  const performSubmit = async (content) => {
     setSubmitting(true);
-    const result = await createRiff(riffText.trim());
+    
+    const result = isEditing 
+      ? await editRiff(editingRiffId, content)
+      : await createRiff(content);
     
     if (result.success) {
-      Alert.alert('Success!', 'Your riff has been submitted', [
+      const successMessage = isEditing ? 'Your riff has been updated!' : 'Your riff has been submitted!';
+      Alert.alert('Success!', successMessage, [
         { text: 'OK', onPress: () => {
           setRiffText('');
+          setIsEditing(false);
+          setEditingRiffId(null);
           navigation.navigate('Home');
         }}
       ]);
     } else {
-      Alert.alert('Error', result.error || 'Failed to submit riff');
+      Alert.alert('Error', result.error || `Failed to ${isEditing ? 'edit' : 'submit'} riff`);
     }
     
     setSubmitting(false);
+  };
+
+  const startEditing = () => {
+    if (todaysRiff && canEdit) {
+      setRiffText(todaysRiff.content);
+      setIsEditing(true);
+      setEditingRiffId(todaysRiff.id);
+    }
+  };
+
+  const cancelEditing = () => {
+    setRiffText('');
+    setIsEditing(false);
+    setEditingRiffId(null);
   };
 
   return (
@@ -306,6 +299,7 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
+    flex: 1,
   },
   submitButtonDisabled: {
     backgroundColor: '#C7C7CC',
@@ -315,9 +309,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
-  todaysRiffsContainer: {
+  todaysRiffContainer: {
     margin: 15,
-    marginTop: 30,
+    marginTop: 20,
   },
   todaysRiffsTitle: {
     fontSize: 18,
@@ -342,6 +336,61 @@ const styles = StyleSheet.create({
   userRiffStats: {
     fontSize: 14,
     color: '#8E8E93',
+  },
+  riffCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  editedBadge: {
+    backgroundColor: '#FF9500',
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  editButton: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  editButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cantEditText: {
+    fontSize: 12,
+    color: '#8E8E93',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    margin: 15,
+    gap: 10,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#8E8E93',
+    padding: 18,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  editSubmitButton: {
+    flex: 2,
   },
 });
 
