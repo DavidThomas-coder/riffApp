@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../config/supabase';
 
 const RiffContext = createContext();
 
@@ -69,18 +69,26 @@ export const RiffProvider = ({ children }) => {
 
   const loadTodaysData = async () => {
     try {
-      // For now, use local storage instead of Firebase
-      // TODO: Re-enable Firebase Firestore once the auth issue is resolved
-      
       const today = new Date().toISOString().split('T')[0];
       
-      // Load stored riffs
-      const storedRiffs = await AsyncStorage.getItem('riffs');
-      const allRiffs = storedRiffs ? JSON.parse(storedRiffs) : [];
-      
-      // Filter today's riffs
-      const todaysRiffs = allRiffs.filter(riff => riff.date === today);
-      setTodaysRiffs(todaysRiffs);
+      // Get today's riffs from Supabase
+      const { data: riffs, error } = await supabase
+        .from('riffs')
+        .select('*')
+        .eq('date', today)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading riffs:', error);
+        setTodaysRiffs([]);
+      } else {
+        // Add hasVoted property for current user
+        const riffsWithVoteStatus = riffs.map(riff => ({
+          ...riff,
+          hasVoted: riff.voted_user_ids?.includes(user?.id) || false,
+        }));
+        setTodaysRiffs(riffsWithVoteStatus || []);
+      }
 
       // Create a proper daily prompt
       const promptText = getDailyPrompt(today);
@@ -92,10 +100,10 @@ export const RiffProvider = ({ children }) => {
       });
 
       // Update leaderboard
-      const sortedRiffs = [...todaysRiffs].sort((a, b) => b.likes - a.likes);
+      const sortedRiffs = [...(riffs || [])].sort((a, b) => b.likes - a.likes);
       setLeaderboard(
         sortedRiffs.map((riff, index) => ({
-          userId: riff.userId,
+          userId: riff.user_id,
           username: riff.username,
           todayLikes: riff.likes,
           rank: index + 1,
@@ -124,38 +132,52 @@ export const RiffProvider = ({ children }) => {
         return { success: false, error: 'User not authenticated' };
       }
 
-      // For now, use local storage instead of Firebase
       const today = new Date().toISOString().split('T')[0];
       
       // Check if user already has a riff today
-      const storedRiffs = await AsyncStorage.getItem('riffs');
-      const allRiffs = storedRiffs ? JSON.parse(storedRiffs) : [];
-      const userRiffToday = allRiffs.find(riff => 
-        riff.userId === user.id && riff.date === today
-      );
+      const { data: existingRiff, error: checkError } = await supabase
+        .from('riffs')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('date', today)
+        .single();
 
-      if (userRiffToday) {
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        return { success: false, error: 'Error checking existing riff' };
+      }
+
+      if (existingRiff) {
         return { success: false, error: 'You can only submit one riff per day' };
       }
 
-      const newRiff = {
-        id: 'riff-' + Date.now(),
-        userId: user.id,
-        username: user.username,
-        content,
-        likes: 0,
-        createdAt: new Date().toISOString(),
-        date: today,
-        hasBeenEdited: false,
-        votedUserIds: [],
+      // Create new riff
+      const { data: newRiff, error: insertError } = await supabase
+        .from('riffs')
+        .insert([
+          {
+            user_id: user.id,
+            username: user.username,
+            content,
+            likes: 0,
+            date: today,
+            has_been_edited: false,
+            voted_user_ids: [],
+          }
+        ])
+        .select()
+        .single();
+
+      if (insertError) {
+        return { success: false, error: insertError.message };
+      }
+
+      const riffWithVoteStatus = {
+        ...newRiff,
+        hasVoted: false,
       };
-      
-      // Save to local storage
-      const updatedRiffs = [...allRiffs, newRiff];
-      await AsyncStorage.setItem('riffs', JSON.stringify(updatedRiffs));
-      
-      setTodaysRiffs(prev => [newRiff, ...prev]);
-      return { success: true, riff: newRiff };
+
+      setTodaysRiffs(prev => [riffWithVoteStatus, ...prev]);
+      return { success: true, riff: riffWithVoteStatus };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -167,42 +189,46 @@ export const RiffProvider = ({ children }) => {
         return { success: false, error: 'User not authenticated' };
       }
 
-      // For now, use local storage instead of Firebase
-      const storedRiffs = await AsyncStorage.getItem('riffs');
-      const allRiffs = storedRiffs ? JSON.parse(storedRiffs) : [];
-      const riffIndex = allRiffs.findIndex(riff => riff.id === riffId);
-      
-      if (riffIndex === -1) {
+      // Get the riff first
+      const { data: riff, error: fetchError } = await supabase
+        .from('riffs')
+        .select('*')
+        .eq('id', riffId)
+        .single();
+
+      if (fetchError) {
         return { success: false, error: 'Riff not found' };
       }
 
-      const riff = allRiffs[riffIndex];
-      
-      if (riff.userId !== user.id) {
+      if (riff.user_id !== user.id) {
         return { success: false, error: 'You can only edit your own riffs' };
       }
 
-      if (riff.hasBeenEdited) {
+      if (riff.has_been_edited) {
         return { success: false, error: 'You can only edit your riff once' };
       }
 
-      if (riff.votedUserIds?.length > 0) {
+      if (riff.voted_user_ids?.length > 0) {
         return { success: false, error: 'Cannot edit riff after someone has voted on it' };
       }
 
-      // Update riff
-      allRiffs[riffIndex] = {
-        ...riff,
-        content: newContent,
-        hasBeenEdited: true
-      };
-      
-      await AsyncStorage.setItem('riffs', JSON.stringify(allRiffs));
+      // Update the riff
+      const { error: updateError } = await supabase
+        .from('riffs')
+        .update({
+          content: newContent,
+          has_been_edited: true
+        })
+        .eq('id', riffId);
+
+      if (updateError) {
+        return { success: false, error: updateError.message };
+      }
 
       setTodaysRiffs(prev => 
         prev.map(r => 
           r.id === riffId 
-            ? { ...r, content: newContent, hasBeenEdited: true }
+            ? { ...r, content: newContent, has_been_edited: true }
             : r
         )
       );
@@ -215,22 +241,22 @@ export const RiffProvider = ({ children }) => {
 
   const voteOnRiff = async (riffId, isUpvote) => {
     try {
-      // For now, use local storage instead of Firebase
-      const storedRiffs = await AsyncStorage.getItem('riffs');
-      const allRiffs = storedRiffs ? JSON.parse(storedRiffs) : [];
-      const riffIndex = allRiffs.findIndex(riff => riff.id === riffId);
-      
-      if (riffIndex === -1) {
+      // Get the riff first
+      const { data: riff, error: fetchError } = await supabase
+        .from('riffs')
+        .select('*')
+        .eq('id', riffId)
+        .single();
+
+      if (fetchError) {
         throw new Error('Riff not found');
       }
 
-      const riff = allRiffs[riffIndex];
-      
-      if (riff.userId === user?.id) {
+      if (riff.user_id === user?.id) {
         throw new Error('You cannot vote on your own riff');
       }
 
-      const votedUserIds = riff.votedUserIds || [];
+      const votedUserIds = riff.voted_user_ids || [];
       
       if (votedUserIds.includes(user?.id)) {
         throw new Error('You have already voted on this riff');
@@ -239,14 +265,18 @@ export const RiffProvider = ({ children }) => {
       const newVotedUserIds = [...votedUserIds, user?.id];
       const newLikes = isUpvote ? riff.likes + 1 : riff.likes - 1;
 
-      // Update riff
-      allRiffs[riffIndex] = {
-        ...riff,
-        likes: newLikes,
-        votedUserIds: newVotedUserIds
-      };
-      
-      await AsyncStorage.setItem('riffs', JSON.stringify(allRiffs));
+      // Update the riff
+      const { error: updateError } = await supabase
+        .from('riffs')
+        .update({
+          likes: newLikes,
+          voted_user_ids: newVotedUserIds
+        })
+        .eq('id', riffId);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
 
       setTodaysRiffs(prev => 
         prev.map(r => 
@@ -266,7 +296,7 @@ export const RiffProvider = ({ children }) => {
       const sortedRiffs = [...updatedRiffs].sort((a, b) => b.likes - a.likes);
       setLeaderboard(
         sortedRiffs.map((riff, index) => ({
-          userId: riff.userId,
+          userId: riff.user_id,
           username: riff.username,
           todayLikes: riff.likes,
           rank: index + 1,
@@ -282,16 +312,19 @@ export const RiffProvider = ({ children }) => {
 
   const getUserRiffs = async (userId) => {
     try {
-      // For now, use local storage instead of Firebase
-      const storedRiffs = await AsyncStorage.getItem('riffs');
-      const allRiffs = storedRiffs ? JSON.parse(storedRiffs) : [];
-      
-      const userRiffs = allRiffs
-        .filter(riff => riff.userId === userId)
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .slice(0, 10);
-      
-      return userRiffs;
+      const { data: riffs, error } = await supabase
+        .from('riffs')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        console.error('Failed to get user riffs:', error);
+        return [];
+      }
+
+      return riffs || [];
     } catch (error) {
       console.error('Failed to get user riffs:', error);
       return [];

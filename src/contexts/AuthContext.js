@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../config/supabase';
 
 const AuthContext = createContext();
 
@@ -16,40 +17,73 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored user data
-    const checkStoredUser = async () => {
+    // Check for existing session
+    const checkUser = async () => {
       try {
-        const storedUser = await AsyncStorage.getItem('user');
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          // Get user profile from profiles table
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          setUser({
+            id: session.user.id,
+            email: session.user.email,
+            username: profile?.username || session.user.email?.split('@')[0],
+            totalMedals: profile?.total_medals || { gold: 0, silver: 0, bronze: 0 },
+            createdAt: profile?.created_at || session.user.created_at,
+          });
         }
       } catch (error) {
-        console.error('Error checking stored user:', error);
+        console.error('Error checking user session:', error);
       }
       setLoading(false);
     };
-    
-    checkStoredUser();
+
+    checkUser();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          // Get user profile from profiles table
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          setUser({
+            id: session.user.id,
+            email: session.user.email,
+            username: profile?.username || session.user.email?.split('@')[0],
+            totalMedals: profile?.total_medals || { gold: 0, silver: 0, bronze: 0 },
+            createdAt: profile?.created_at || session.user.created_at,
+          });
+        } else {
+          setUser(null);
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email, password) => {
     try {
-      // For now, implement simple local authentication
-      // TODO: Re-enable Firebase Auth once the registration issue is resolved
-      
-      // Simulate authentication
-      const userInfo = {
-        id: 'local-user-' + Date.now(),
-        email: email,
-        username: email.split('@')[0],
-        totalMedals: { gold: 0, silver: 0, bronze: 0 },
-        createdAt: new Date().toISOString(),
-      };
-      
-      // Store user data locally
-      await AsyncStorage.setItem('user', JSON.stringify(userInfo));
-      setUser(userInfo);
-      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
       return { success: true };
     } catch (error) {
       return { success: false, error: 'Login failed: ' + error.message };
@@ -58,22 +92,34 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (email, password, username) => {
     try {
-      // For now, implement simple local registration
-      // TODO: Re-enable Firebase Auth once the registration issue is resolved
-      
-      // Simulate user creation
-      const userInfo = {
-        id: 'local-user-' + Date.now(),
-        email: email,
-        username: username,
-        totalMedals: { gold: 0, silver: 0, bronze: 0 },
-        createdAt: new Date().toISOString(),
-      };
-      
-      // Store user data locally
-      await AsyncStorage.setItem('user', JSON.stringify(userInfo));
-      setUser(userInfo);
-      
+      // Create user account
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      // Create user profile
+      if (data.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([
+            {
+              id: data.user.id,
+              username,
+              email,
+              total_medals: { gold: 0, silver: 0, bronze: 0 },
+            }
+          ]);
+
+        if (profileError) {
+          console.error('Error creating profile:', profileError);
+        }
+      }
+
       return { success: true };
     } catch (error) {
       return { success: false, error: 'Registration failed: ' + error.message };
@@ -82,8 +128,10 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      // Remove stored user data
-      await AsyncStorage.removeItem('user');
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Logout error:', error);
+      }
       setUser(null);
     } catch (error) {
       console.error('Logout failed:', error);
