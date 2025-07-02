@@ -12,6 +12,40 @@ export const useRiff = () => {
   return context;
 };
 
+// Daily prompts array
+const DAILY_PROMPTS = [
+  "What's the most interesting thing you learned today?",
+  "Share a moment that made you smile today.",
+  "What's something you're looking forward to this week?",
+  "Describe a challenge you overcame recently.",
+  "What's your favorite way to spend a free afternoon?",
+  "Share a piece of advice you'd give to your younger self.",
+  "What's something that always cheers you up?",
+  "Describe your perfect weekend in three words.",
+  "What's a skill you'd love to learn?",
+  "Share a quote that inspires you.",
+  "What's the best compliment you've ever received?",
+  "Describe a place that feels like home to you.",
+  "What's something you're grateful for today?",
+  "Share a small victory from this week.",
+  "What's your favorite way to practice self-care?",
+  "Describe a book, movie, or song that changed your perspective.",
+  "What's something you're curious about lately?",
+  "Share a tradition that's important to you.",
+  "What's the most beautiful thing you've seen today?",
+  "Describe your ideal morning routine.",
+  "What's something that always makes you laugh?",
+  "Share a goal you're working towards.",
+  "What's your favorite season and why?",
+  "Describe a person who inspires you.",
+  "What's something you're passionate about?",
+  "Share a memory that makes you happy.",
+  "What's your favorite way to connect with others?",
+  "Describe a moment when you felt proud of yourself.",
+  "What's something you'd like to improve about yourself?",
+  "Share a lesson you learned the hard way."
+];
+
 export const RiffProvider = ({ children }) => {
   const { user } = useAuth();
   const [dailyPrompt, setDailyPrompt] = useState(null);
@@ -24,6 +58,14 @@ export const RiffProvider = ({ children }) => {
       loadTodaysData();
     }
   }, [user]);
+
+  const getDailyPrompt = (date) => {
+    // Use the date to generate a consistent prompt for each day
+    const dateObj = new Date(date);
+    const dayOfYear = Math.floor((dateObj - new Date(dateObj.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
+    const promptIndex = dayOfYear % DAILY_PROMPTS.length;
+    return DAILY_PROMPTS[promptIndex];
+  };
 
   const loadTodaysData = async () => {
     try {
@@ -40,10 +82,11 @@ export const RiffProvider = ({ children }) => {
       const todaysRiffs = allRiffs.filter(riff => riff.date === today);
       setTodaysRiffs(todaysRiffs);
 
-      // Create a simple daily prompt
+      // Create a proper daily prompt
+      const promptText = getDailyPrompt(today);
       setDailyPrompt({
-        id: 'local-prompt',
-        text: 'Share your thoughts on today\'s challenge!',
+        id: 'prompt-' + today,
+        text: promptText,
         date: today,
         resetTime: getNextResetTime(),
       });

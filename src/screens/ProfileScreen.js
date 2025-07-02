@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useRiff } from '../contexts/RiffContext';
@@ -7,14 +7,32 @@ import MedalDisplay from '../components/MedalDisplay';
 const ProfileScreen = () => {
   const { user, logout } = useAuth();
   const { getUserRiffs, todaysRiffs } = useRiff();
+  const [userRiffs, setUserRiffs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const userRiffs = getUserRiffs();
-  const totalLikes = userRiffs.reduce((sum, riff) => sum + riff.likes, 0);
+  useEffect(() => {
+    const loadUserRiffs = async () => {
+      if (user?.id) {
+        try {
+          const riffs = await getUserRiffs(user.id);
+          setUserRiffs(riffs || []);
+        } catch (error) {
+          console.error('Error loading user riffs:', error);
+          setUserRiffs([]);
+        }
+      }
+      setLoading(false);
+    };
+
+    loadUserRiffs();
+  }, [user?.id, getUserRiffs]);
+
+  const totalLikes = userRiffs.reduce((sum, riff) => sum + (riff.likes || 0), 0);
 
   // Mock additional stats - in a real app, these would come from the backend
   const mockUserStats = {
-    totalRiffs: 45,
-    totalLikes: 312 + totalLikes,
+    totalRiffs: userRiffs.length,
+    totalLikes: totalLikes,
     streak: 7,
     bestRank: 1,
     joinDate: user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Recently',
@@ -30,6 +48,14 @@ const ProfileScreen = () => {
       ]
     );
   };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <Text>Loading profile...</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -93,7 +119,7 @@ const ProfileScreen = () => {
               <View key={riff.id} style={styles.riffCard}>
                 <Text style={styles.riffContent}>{riff.content}</Text>
                 <View style={styles.riffFooter}>
-                  <Text style={styles.riffStats}>👍 {riff.likes} likes</Text>
+                  <Text style={styles.riffStats}>👍 {riff.likes || 0} likes</Text>
                   <Text style={styles.riffTime}>
                     {new Date(riff.createdAt).toLocaleTimeString([], {
                       hour: '2-digit',
