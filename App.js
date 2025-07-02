@@ -109,14 +109,20 @@ const AppNavigator = () => {
 
 export default function App() {
   useEffect(() => {
-    const setupFirebase = async () => {
-      const isConnected = await testFirebaseConnection();
-      if (isConnected) {
-        await initializePrompts();
+    // Delay Firebase initialization to ensure app is fully loaded
+    const timer = setTimeout(async () => {
+      try {
+        console.log('Initializing Firebase...');
+        const isConnected = await testFirebaseConnection();
+        if (isConnected) {
+          await initializePrompts();
+        }
+      } catch (error) {
+        console.error('Firebase initialization error:', error);
       }
-    };
-    
-    setupFirebase();
+    }, 1000); // Wait 1 second for app to fully load
+
+    return () => clearTimeout(timer);
   }, []);
 
   return (
