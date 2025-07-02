@@ -22,11 +22,47 @@ const firebaseConfig = {
   measurementId: FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Lazy initialization
+let firebaseApp = null;
+let firebaseAuth = null;
+let firebaseDb = null;
 
-// Initialize services
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+const initializeFirebase = () => {
+  if (!firebaseApp) {
+    firebaseApp = initializeApp(firebaseConfig);
+  }
+  if (!firebaseAuth) {
+    firebaseAuth = getAuth(firebaseApp);
+  }
+  if (!firebaseDb) {
+    firebaseDb = getFirestore(firebaseApp);
+  }
+  return { app: firebaseApp, auth: firebaseAuth, db: firebaseDb };
+};
 
-export default app; 
+// Export getters that initialize on first use
+export const getFirebaseApp = () => {
+  if (!firebaseApp) {
+    initializeFirebase();
+  }
+  return firebaseApp;
+};
+
+export const getFirebaseAuth = () => {
+  if (!firebaseAuth) {
+    initializeFirebase();
+  }
+  return firebaseAuth;
+};
+
+export const getFirebaseDb = () => {
+  if (!firebaseDb) {
+    initializeFirebase();
+  }
+  return firebaseDb;
+};
+
+// For backward compatibility - these will initialize when first accessed
+export const auth = getFirebaseAuth();
+export const db = getFirebaseDb();
+export default getFirebaseApp(); 
