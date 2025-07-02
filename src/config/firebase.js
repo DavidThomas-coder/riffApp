@@ -46,7 +46,7 @@ export const getFirebaseDb = () => {
   }
 };
 
-// For backward compatibility - these will create instances when accessed
-export const auth = getFirebaseAuth();
-export const db = getFirebaseDb();
+// For backward compatibility - these are now getter functions
+export const auth = getFirebaseAuth;
+export const db = getFirebaseDb;
 export default app; 
