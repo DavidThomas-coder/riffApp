@@ -1,5 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { auth, db } from '../config/firebase';
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
@@ -16,73 +24,90 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkAuthState();
-  }, []);
-
-  const checkAuthState = async () => {
-    try {
-      const userData = await AsyncStorage.getItem('user');
-      if (userData) {
-        setUser(JSON.parse(userData));
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Get additional user data from Firestore
+        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+        const userData = userDoc.exists() ? userDoc.data() : null;
+        
+        const userInfo = {
+          id: firebaseUser.uid,
+          email: firebaseUser.email,
+          username: userData?.username || firebaseUser.email?.split('@')[0],
+          totalMedals: userData?.totalMedals || { gold: 0, silver: 0, bronze: 0 },
+          createdAt: userData?.createdAt || firebaseUser.metadata.creationTime,
+        };
+        
+        setUser(userInfo);
+      } else {
+        setUser(null);
       }
-    } catch (error) {
-      console.error('Auth check failed:', error);
-    } finally {
       setLoading(false);
-    }
-  };
+    });
+
+    return unsubscribe;
+  }, []);
 
   const login = async (email, password) => {
     try {
-      // In a real app, this would make an API call
-      // For now, we'll simulate authentication
-      if (email && password.length >= 6) {
-        const userData = {
-          id: `user_${Date.now()}`,
-          email,
-          username: email.split('@')[0],
-          totalMedals: { gold: 2, silver: 5, bronze: 8 },
-          createdAt: new Date().toISOString(),
-        };
-        
-        await AsyncStorage.setItem('user', JSON.stringify(userData));
-        setUser(userData);
-        return { success: true };
-      } else {
-        return { success: false, error: 'Invalid credentials' };
-      }
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      return { success: true };
     } catch (error) {
-      return { success: false, error: error.message };
+      let errorMessage = 'Login failed';
+      switch (error.code) {
+        case 'auth/user-not-found':
+          errorMessage = 'No account found with this email';
+          break;
+        case 'auth/wrong-password':
+          errorMessage = 'Incorrect password';
+          break;
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email address';
+          break;
+        default:
+          errorMessage = error.message;
+      }
+      return { success: false, error: errorMessage };
     }
   };
 
   const register = async (email, password, username) => {
     try {
-      // In a real app, this would make an API call
-      if (email && password.length >= 6 && username.length >= 3) {
-        const userData = {
-          id: `user_${Date.now()}`,
-          email,
-          username,
-          totalMedals: { gold: 0, silver: 0, bronze: 0 },
-          createdAt: new Date().toISOString(),
-        };
-        
-        await AsyncStorage.setItem('user', JSON.stringify(userData));
-        setUser(userData);
-        return { success: true };
-      } else {
-        return { success: false, error: 'Invalid registration data' };
-      }
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Create user document in Firestore
+      const userData = {
+        username,
+        email,
+        totalMedals: { gold: 0, silver: 0, bronze: 0 },
+        createdAt: new Date().toISOString(),
+      };
+      
+      await setDoc(doc(db, 'users', userCredential.user.uid), userData);
+      
+      return { success: true };
     } catch (error) {
-      return { success: false, error: error.message };
+      let errorMessage = 'Registration failed';
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          errorMessage = 'An account with this email already exists';
+          break;
+        case 'auth/weak-password':
+          errorMessage = 'Password should be at least 6 characters';
+          break;
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email address';
+          break;
+        default:
+          errorMessage = error.message;
+      }
+      return { success: false, error: errorMessage };
     }
   };
 
   const logout = async () => {
     try {
-      await AsyncStorage.removeItem('user');
-      setUser(null);
+      await signOut(auth);
     } catch (error) {
       console.error('Logout failed:', error);
     }

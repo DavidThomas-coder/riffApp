@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -6,6 +6,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { RiffProvider } from './src/contexts/RiffContext';
+import { initializePrompts } from './src/scripts/initializeFirebase';
+import { testFirebaseConnection } from './src/scripts/testFirebase';
 
 // Import screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -106,6 +108,17 @@ const AppNavigator = () => {
 };
 
 export default function App() {
+  useEffect(() => {
+    const setupFirebase = async () => {
+      const isConnected = await testFirebaseConnection();
+      if (isConnected) {
+        await initializePrompts();
+      }
+    };
+    
+    setupFirebase();
+  }, []);
+
   return (
     <AuthProvider>
       <RiffProvider>
