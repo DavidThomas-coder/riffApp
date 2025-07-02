@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -6,8 +6,6 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { RiffProvider } from './src/contexts/RiffContext';
-import { initializePrompts } from './src/scripts/initializeFirebase';
-import { testFirebaseConnection } from './src/scripts/testFirebase';
 
 // Import screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -108,23 +106,6 @@ const AppNavigator = () => {
 };
 
 export default function App() {
-  useEffect(() => {
-    // Delay Firebase initialization to ensure app is fully loaded
-    const timer = setTimeout(async () => {
-      try {
-        console.log('Initializing Firebase...');
-        const isConnected = await testFirebaseConnection();
-        if (isConnected) {
-          await initializePrompts();
-        }
-      } catch (error) {
-        console.error('Firebase initialization error:', error);
-      }
-    }, 1000); // Wait 1 second for app to fully load
-
-    return () => clearTimeout(timer);
-  }, []);
-
   return (
     <AuthProvider>
       <RiffProvider>
