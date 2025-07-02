@@ -1,18 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
-import { db } from '../config/firebase';
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  addDoc, 
-  updateDoc,
-  doc,
-  serverTimestamp,
-  orderBy,
-  limit 
-} from 'firebase/firestore';
 
 const RiffContext = createContext();
 
@@ -39,6 +26,17 @@ export const RiffProvider = ({ children }) => {
 
   const loadTodaysData = async () => {
     try {
+      // Lazy load Firebase only when needed
+      const { getFirebaseDb } = await import('../config/firebase');
+      const { 
+        collection, 
+        query, 
+        where, 
+        getDocs, 
+        orderBy 
+      } = await import('firebase/firestore');
+      
+      const db = getFirebaseDb();
       const today = new Date().toISOString().split('T')[0];
       
       // Get today's prompt
@@ -105,6 +103,19 @@ export const RiffProvider = ({ children }) => {
         return { success: false, error: 'User not authenticated' };
       }
 
+      // Lazy load Firebase only when needed
+      const { getFirebaseDb } = await import('../config/firebase');
+      const { 
+        collection, 
+        query, 
+        where, 
+        getDocs, 
+        addDoc, 
+        serverTimestamp 
+      } = await import('firebase/firestore');
+      
+      const db = getFirebaseDb();
+
       // Check if user already has a riff today
       const today = new Date().toISOString().split('T')[0];
       const userRiffsRef = collection(db, 'riffs');
@@ -146,8 +157,14 @@ export const RiffProvider = ({ children }) => {
         return { success: false, error: 'User not authenticated' };
       }
 
+      // Lazy load Firebase only when needed
+      const { getFirebaseDb } = await import('../config/firebase');
+      const { doc, getDoc, updateDoc } = await import('firebase/firestore');
+      
+      const db = getFirebaseDb();
+
       const riffRef = doc(db, 'riffs', riffId);
-      const riffDoc = await getDocs(riffRef);
+      const riffDoc = await getDoc(riffRef);
       
       if (!riffDoc.exists()) {
         return { success: false, error: 'Riff not found' };
@@ -188,8 +205,14 @@ export const RiffProvider = ({ children }) => {
 
   const voteOnRiff = async (riffId, isUpvote) => {
     try {
+      // Lazy load Firebase only when needed
+      const { getFirebaseDb } = await import('../config/firebase');
+      const { doc, getDoc, updateDoc } = await import('firebase/firestore');
+      
+      const db = getFirebaseDb();
+
       const riffRef = doc(db, 'riffs', riffId);
-      const riffDoc = await getDocs(riffRef);
+      const riffDoc = await getDoc(riffRef);
       
       if (!riffDoc.exists()) {
         throw new Error('Riff not found');
@@ -198,14 +221,17 @@ export const RiffProvider = ({ children }) => {
       const riffData = riffDoc.data();
       
       if (riffData.userId === user?.id) {
-        throw new Error('Cannot vote on your own riff');
+        throw new Error('You cannot vote on your own riff');
       }
 
-      const newVotedUserIds = isUpvote
-        ? [...(riffData.votedUserIds || []), user.id]
-        : (riffData.votedUserIds || []).filter(id => id !== user.id);
+      const votedUserIds = riffData.votedUserIds || [];
+      
+      if (votedUserIds.includes(user?.id)) {
+        throw new Error('You have already voted on this riff');
+      }
 
-      const newLikes = isUpvote ? riffData.likes + 1 : Math.max(0, riffData.likes - 1);
+      const newVotedUserIds = [...votedUserIds, user?.id];
+      const newLikes = isUpvote ? riffData.likes + 1 : riffData.likes - 1;
 
       await updateDoc(riffRef, {
         likes: newLikes,
@@ -213,21 +239,21 @@ export const RiffProvider = ({ children }) => {
       });
 
       setTodaysRiffs(prev => 
-        prev.map(riff => {
-          if (riff.id === riffId) {
-            return { 
-              ...riff, 
-              likes: newLikes, 
-              hasVoted: isUpvote,
-              votedUserIds: newVotedUserIds
-            };
-          }
-          return riff;
-        })
+        prev.map(r => 
+          r.id === riffId 
+            ? { ...r, likes: newLikes, hasVoted: true }
+            : r
+        )
       );
 
       // Update leaderboard
-      const sortedRiffs = [...todaysRiffs].sort((a, b) => b.likes - a.likes);
+      const updatedRiffs = todaysRiffs.map(r => 
+        r.id === riffId 
+          ? { ...r, likes: newLikes }
+          : r
+      );
+      
+      const sortedRiffs = [...updatedRiffs].sort((a, b) => b.likes - a.likes);
       setLeaderboard(
         sortedRiffs.map((riff, index) => ({
           userId: riff.userId,
@@ -246,16 +272,22 @@ export const RiffProvider = ({ children }) => {
 
   const getUserRiffs = async (userId) => {
     try {
+      // Lazy load Firebase only when needed
+      const { getFirebaseDb } = await import('../config/firebase');
+      const { collection, query, where, getDocs, orderBy, limit } = await import('firebase/firestore');
+      
+      const db = getFirebaseDb();
+
       const riffsRef = collection(db, 'riffs');
       const userRiffsQuery = query(
         riffsRef,
-        where('userId', '==', userId || user.id),
+        where('userId', '==', userId),
         orderBy('createdAt', 'desc'),
         limit(10)
       );
       
-      const riffsSnapshot = await getDocs(userRiffsQuery);
-      return riffsSnapshot.docs.map(doc => ({
+      const snapshot = await getDocs(userRiffsQuery);
+      return snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
@@ -273,8 +305,8 @@ export const RiffProvider = ({ children }) => {
     createRiff,
     editRiff,
     voteOnRiff,
-    refreshData: loadTodaysData,
     getUserRiffs,
+    loadTodaysData
   };
 
   return (

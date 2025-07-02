@@ -1,13 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { auth, db } from '../config/firebase';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
@@ -24,33 +16,37 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // Get additional user data from Firestore
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        const userData = userDoc.exists() ? userDoc.data() : null;
-        
-        const userInfo = {
-          id: firebaseUser.uid,
-          email: firebaseUser.email,
-          username: userData?.username || firebaseUser.email?.split('@')[0],
-          totalMedals: userData?.totalMedals || { gold: 0, silver: 0, bronze: 0 },
-          createdAt: userData?.createdAt || firebaseUser.metadata.creationTime,
-        };
-        
-        setUser(userInfo);
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
-
-    return unsubscribe;
+    // For now, just set loading to false without Firebase auth state
+    // We'll implement Firebase auth later when the user actually tries to login
+    setLoading(false);
   }, []);
 
   const login = async (email, password) => {
     try {
+      // Lazy load Firebase only when needed
+      const { getFirebaseAuth } = await import('../config/firebase');
+      const { signInWithEmailAndPassword } = await import('firebase/auth');
+      const { getFirebaseDb } = await import('../config/firebase');
+      const { doc, getDoc } = await import('firebase/firestore');
+      
+      const auth = getFirebaseAuth();
+      const db = getFirebaseDb();
+      
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Get additional user data from Firestore
+      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+      const userData = userDoc.exists() ? userDoc.data() : null;
+      
+      const userInfo = {
+        id: userCredential.user.uid,
+        email: userCredential.user.email,
+        username: userData?.username || userCredential.user.email?.split('@')[0],
+        totalMedals: userData?.totalMedals || { gold: 0, silver: 0, bronze: 0 },
+        createdAt: userData?.createdAt || userCredential.user.metadata.creationTime,
+      };
+      
+      setUser(userInfo);
       return { success: true };
     } catch (error) {
       let errorMessage = 'Login failed';
@@ -73,6 +69,15 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (email, password, username) => {
     try {
+      // Lazy load Firebase only when needed
+      const { getFirebaseAuth } = await import('../config/firebase');
+      const { createUserWithEmailAndPassword } = await import('firebase/auth');
+      const { getFirebaseDb } = await import('../config/firebase');
+      const { doc, setDoc } = await import('firebase/firestore');
+      
+      const auth = getFirebaseAuth();
+      const db = getFirebaseDb();
+      
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
       // Create user document in Firestore
@@ -85,6 +90,15 @@ export const AuthProvider = ({ children }) => {
       
       await setDoc(doc(db, 'users', userCredential.user.uid), userData);
       
+      const userInfo = {
+        id: userCredential.user.uid,
+        email: userCredential.user.email,
+        username,
+        totalMedals: { gold: 0, silver: 0, bronze: 0 },
+        createdAt: userData.createdAt,
+      };
+      
+      setUser(userInfo);
       return { success: true };
     } catch (error) {
       let errorMessage = 'Registration failed';
@@ -107,7 +121,13 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      // Lazy load Firebase only when needed
+      const { getFirebaseAuth } = await import('../config/firebase');
+      const { signOut } = await import('firebase/auth');
+      
+      const auth = getFirebaseAuth();
       await signOut(auth);
+      setUser(null);
     } catch (error) {
       console.error('Logout failed:', error);
     }
