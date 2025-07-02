@@ -16,117 +16,74 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // For now, just set loading to false without Firebase auth state
-    // We'll implement Firebase auth later when the user actually tries to login
-    setLoading(false);
+    // Check for stored user data
+    const checkStoredUser = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem('user');
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
+      } catch (error) {
+        console.error('Error checking stored user:', error);
+      }
+      setLoading(false);
+    };
+    
+    checkStoredUser();
   }, []);
 
   const login = async (email, password) => {
     try {
-      // Lazy load Firebase only when needed
-      const { getFirebaseAuth } = await import('../config/firebase');
-      const { signInWithEmailAndPassword } = await import('firebase/auth');
-      const { getFirebaseDb } = await import('../config/firebase');
-      const { doc, getDoc } = await import('firebase/firestore');
+      // For now, implement simple local authentication
+      // TODO: Re-enable Firebase Auth once the registration issue is resolved
       
-      const auth = getFirebaseAuth();
-      const db = getFirebaseDb();
-      
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      // Get additional user data from Firestore
-      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-      const userData = userDoc.exists() ? userDoc.data() : null;
-      
+      // Simulate authentication
       const userInfo = {
-        id: userCredential.user.uid,
-        email: userCredential.user.email,
-        username: userData?.username || userCredential.user.email?.split('@')[0],
-        totalMedals: userData?.totalMedals || { gold: 0, silver: 0, bronze: 0 },
-        createdAt: userData?.createdAt || userCredential.user.metadata.creationTime,
+        id: 'local-user-' + Date.now(),
+        email: email,
+        username: email.split('@')[0],
+        totalMedals: { gold: 0, silver: 0, bronze: 0 },
+        createdAt: new Date().toISOString(),
       };
       
+      // Store user data locally
+      await AsyncStorage.setItem('user', JSON.stringify(userInfo));
       setUser(userInfo);
+      
       return { success: true };
     } catch (error) {
-      let errorMessage = 'Login failed';
-      switch (error.code) {
-        case 'auth/user-not-found':
-          errorMessage = 'No account found with this email';
-          break;
-        case 'auth/wrong-password':
-          errorMessage = 'Incorrect password';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address';
-          break;
-        default:
-          errorMessage = error.message;
-      }
-      return { success: false, error: errorMessage };
+      return { success: false, error: 'Login failed: ' + error.message };
     }
   };
 
   const register = async (email, password, username) => {
     try {
-      // Lazy load Firebase only when needed
-      const { getFirebaseAuth } = await import('../config/firebase');
-      const { createUserWithEmailAndPassword } = await import('firebase/auth');
-      const { getFirebaseDb } = await import('../config/firebase');
-      const { doc, setDoc } = await import('firebase/firestore');
+      // For now, implement simple local registration
+      // TODO: Re-enable Firebase Auth once the registration issue is resolved
       
-      const auth = getFirebaseAuth();
-      const db = getFirebaseDb();
-      
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // Create user document in Firestore
-      const userData = {
-        username,
-        email,
+      // Simulate user creation
+      const userInfo = {
+        id: 'local-user-' + Date.now(),
+        email: email,
+        username: username,
         totalMedals: { gold: 0, silver: 0, bronze: 0 },
         createdAt: new Date().toISOString(),
       };
       
-      await setDoc(doc(db, 'users', userCredential.user.uid), userData);
-      
-      const userInfo = {
-        id: userCredential.user.uid,
-        email: userCredential.user.email,
-        username,
-        totalMedals: { gold: 0, silver: 0, bronze: 0 },
-        createdAt: userData.createdAt,
-      };
-      
+      // Store user data locally
+      await AsyncStorage.setItem('user', JSON.stringify(userInfo));
       setUser(userInfo);
+      
       return { success: true };
     } catch (error) {
-      let errorMessage = 'Registration failed';
-      switch (error.code) {
-        case 'auth/email-already-in-use':
-          errorMessage = 'An account with this email already exists';
-          break;
-        case 'auth/weak-password':
-          errorMessage = 'Password should be at least 6 characters';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address';
-          break;
-        default:
-          errorMessage = error.message;
-      }
-      return { success: false, error: errorMessage };
+      return { success: false, error: 'Registration failed: ' + error.message };
     }
   };
 
   const logout = async () => {
     try {
-      // Lazy load Firebase only when needed
-      const { getFirebaseAuth } = await import('../config/firebase');
-      const { signOut } = await import('firebase/auth');
-      
-      const auth = getFirebaseAuth();
-      await signOut(auth);
+      // Remove stored user data
+      await AsyncStorage.removeItem('user');
       setUser(null);
     } catch (error) {
       console.error('Logout failed:', error);

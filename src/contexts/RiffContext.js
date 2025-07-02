@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const RiffContext = createContext();
 
@@ -26,52 +27,29 @@ export const RiffProvider = ({ children }) => {
 
   const loadTodaysData = async () => {
     try {
-      // Lazy load Firebase only when needed
-      const { getFirebaseDb } = await import('../config/firebase');
-      const { 
-        collection, 
-        query, 
-        where, 
-        getDocs, 
-        orderBy 
-      } = await import('firebase/firestore');
+      // For now, use local storage instead of Firebase
+      // TODO: Re-enable Firebase Firestore once the auth issue is resolved
       
-      const db = getFirebaseDb();
       const today = new Date().toISOString().split('T')[0];
       
-      // Get today's prompt
-      const promptsRef = collection(db, 'prompts');
-      const promptQuery = query(promptsRef, where('date', '==', today));
-      const promptSnapshot = await getDocs(promptQuery);
+      // Load stored riffs
+      const storedRiffs = await AsyncStorage.getItem('riffs');
+      const allRiffs = storedRiffs ? JSON.parse(storedRiffs) : [];
       
-      if (!promptSnapshot.empty) {
-        const promptDoc = promptSnapshot.docs[0];
-        setDailyPrompt({
-          id: promptDoc.id,
-          ...promptDoc.data(),
-          resetTime: getNextResetTime(),
-        });
-      }
+      // Filter today's riffs
+      const todaysRiffs = allRiffs.filter(riff => riff.date === today);
+      setTodaysRiffs(todaysRiffs);
 
-      // Get today's riffs
-      const riffsRef = collection(db, 'riffs');
-      const riffsQuery = query(
-        riffsRef,
-        where('date', '==', today),
-        orderBy('createdAt', 'desc')
-      );
-      const riffsSnapshot = await getDocs(riffsQuery);
-      
-      const riffs = riffsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        hasVoted: doc.data().votedUserIds?.includes(user.id) || false,
-      }));
-      
-      setTodaysRiffs(riffs);
+      // Create a simple daily prompt
+      setDailyPrompt({
+        id: 'local-prompt',
+        text: 'Share your thoughts on today\'s challenge!',
+        date: today,
+        resetTime: getNextResetTime(),
+      });
 
       // Update leaderboard
-      const sortedRiffs = [...riffs].sort((a, b) => b.likes - a.likes);
+      const sortedRiffs = [...todaysRiffs].sort((a, b) => b.likes - a.likes);
       setLeaderboard(
         sortedRiffs.map((riff, index) => ({
           userId: riff.userId,
@@ -103,49 +81,38 @@ export const RiffProvider = ({ children }) => {
         return { success: false, error: 'User not authenticated' };
       }
 
-      // Lazy load Firebase only when needed
-      const { getFirebaseDb } = await import('../config/firebase');
-      const { 
-        collection, 
-        query, 
-        where, 
-        getDocs, 
-        addDoc, 
-        serverTimestamp 
-      } = await import('firebase/firestore');
-      
-      const db = getFirebaseDb();
-
-      // Check if user already has a riff today
+      // For now, use local storage instead of Firebase
       const today = new Date().toISOString().split('T')[0];
-      const userRiffsRef = collection(db, 'riffs');
-      const userRiffQuery = query(
-        userRiffsRef,
-        where('userId', '==', user.id),
-        where('date', '==', today)
+      
+      // Check if user already has a riff today
+      const storedRiffs = await AsyncStorage.getItem('riffs');
+      const allRiffs = storedRiffs ? JSON.parse(storedRiffs) : [];
+      const userRiffToday = allRiffs.find(riff => 
+        riff.userId === user.id && riff.date === today
       );
-      const userRiffSnapshot = await getDocs(userRiffQuery);
 
-      if (!userRiffSnapshot.empty) {
+      if (userRiffToday) {
         return { success: false, error: 'You can only submit one riff per day' };
       }
 
       const newRiff = {
+        id: 'riff-' + Date.now(),
         userId: user.id,
-        username: user.displayName || user.email,
+        username: user.username,
         content,
         likes: 0,
-        createdAt: serverTimestamp(),
+        createdAt: new Date().toISOString(),
         date: today,
         hasBeenEdited: false,
         votedUserIds: [],
       };
       
-      const docRef = await addDoc(collection(db, 'riffs'), newRiff);
-      const riffWithId = { id: docRef.id, ...newRiff, hasVoted: false };
+      // Save to local storage
+      const updatedRiffs = [...allRiffs, newRiff];
+      await AsyncStorage.setItem('riffs', JSON.stringify(updatedRiffs));
       
-      setTodaysRiffs(prev => [riffWithId, ...prev]);
-      return { success: true, riff: riffWithId };
+      setTodaysRiffs(prev => [newRiff, ...prev]);
+      return { success: true, riff: newRiff };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -157,37 +124,37 @@ export const RiffProvider = ({ children }) => {
         return { success: false, error: 'User not authenticated' };
       }
 
-      // Lazy load Firebase only when needed
-      const { getFirebaseDb } = await import('../config/firebase');
-      const { doc, getDoc, updateDoc } = await import('firebase/firestore');
+      // For now, use local storage instead of Firebase
+      const storedRiffs = await AsyncStorage.getItem('riffs');
+      const allRiffs = storedRiffs ? JSON.parse(storedRiffs) : [];
+      const riffIndex = allRiffs.findIndex(riff => riff.id === riffId);
       
-      const db = getFirebaseDb();
-
-      const riffRef = doc(db, 'riffs', riffId);
-      const riffDoc = await getDoc(riffRef);
-      
-      if (!riffDoc.exists()) {
+      if (riffIndex === -1) {
         return { success: false, error: 'Riff not found' };
       }
 
-      const riffData = riffDoc.data();
+      const riff = allRiffs[riffIndex];
       
-      if (riffData.userId !== user.id) {
+      if (riff.userId !== user.id) {
         return { success: false, error: 'You can only edit your own riffs' };
       }
 
-      if (riffData.hasBeenEdited) {
+      if (riff.hasBeenEdited) {
         return { success: false, error: 'You can only edit your riff once' };
       }
 
-      if (riffData.votedUserIds?.length > 0) {
+      if (riff.votedUserIds?.length > 0) {
         return { success: false, error: 'Cannot edit riff after someone has voted on it' };
       }
 
-      await updateDoc(riffRef, {
+      // Update riff
+      allRiffs[riffIndex] = {
+        ...riff,
         content: newContent,
         hasBeenEdited: true
-      });
+      };
+      
+      await AsyncStorage.setItem('riffs', JSON.stringify(allRiffs));
 
       setTodaysRiffs(prev => 
         prev.map(r => 
@@ -205,38 +172,38 @@ export const RiffProvider = ({ children }) => {
 
   const voteOnRiff = async (riffId, isUpvote) => {
     try {
-      // Lazy load Firebase only when needed
-      const { getFirebaseDb } = await import('../config/firebase');
-      const { doc, getDoc, updateDoc } = await import('firebase/firestore');
+      // For now, use local storage instead of Firebase
+      const storedRiffs = await AsyncStorage.getItem('riffs');
+      const allRiffs = storedRiffs ? JSON.parse(storedRiffs) : [];
+      const riffIndex = allRiffs.findIndex(riff => riff.id === riffId);
       
-      const db = getFirebaseDb();
-
-      const riffRef = doc(db, 'riffs', riffId);
-      const riffDoc = await getDoc(riffRef);
-      
-      if (!riffDoc.exists()) {
+      if (riffIndex === -1) {
         throw new Error('Riff not found');
       }
 
-      const riffData = riffDoc.data();
+      const riff = allRiffs[riffIndex];
       
-      if (riffData.userId === user?.id) {
+      if (riff.userId === user?.id) {
         throw new Error('You cannot vote on your own riff');
       }
 
-      const votedUserIds = riffData.votedUserIds || [];
+      const votedUserIds = riff.votedUserIds || [];
       
       if (votedUserIds.includes(user?.id)) {
         throw new Error('You have already voted on this riff');
       }
 
       const newVotedUserIds = [...votedUserIds, user?.id];
-      const newLikes = isUpvote ? riffData.likes + 1 : riffData.likes - 1;
+      const newLikes = isUpvote ? riff.likes + 1 : riff.likes - 1;
 
-      await updateDoc(riffRef, {
+      // Update riff
+      allRiffs[riffIndex] = {
+        ...riff,
         likes: newLikes,
         votedUserIds: newVotedUserIds
-      });
+      };
+      
+      await AsyncStorage.setItem('riffs', JSON.stringify(allRiffs));
 
       setTodaysRiffs(prev => 
         prev.map(r => 
@@ -272,25 +239,16 @@ export const RiffProvider = ({ children }) => {
 
   const getUserRiffs = async (userId) => {
     try {
-      // Lazy load Firebase only when needed
-      const { getFirebaseDb } = await import('../config/firebase');
-      const { collection, query, where, getDocs, orderBy, limit } = await import('firebase/firestore');
+      // For now, use local storage instead of Firebase
+      const storedRiffs = await AsyncStorage.getItem('riffs');
+      const allRiffs = storedRiffs ? JSON.parse(storedRiffs) : [];
       
-      const db = getFirebaseDb();
-
-      const riffsRef = collection(db, 'riffs');
-      const userRiffsQuery = query(
-        riffsRef,
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc'),
-        limit(10)
-      );
+      const userRiffs = allRiffs
+        .filter(riff => riff.userId === userId)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .slice(0, 10);
       
-      const snapshot = await getDocs(userRiffsQuery);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      return userRiffs;
     } catch (error) {
       console.error('Failed to get user riffs:', error);
       return [];
